@@ -4,15 +4,16 @@ import path from "node:path";
 import YAML from "yaml";
 import type { UserChoices } from "./prompts.js";
 
-export function cloneTemplate(repo: string, dest: string): void {
-  execSync(`git clone --depth 1 ${repo} ${dest}`, {
-    stdio: "pipe",
-  });
-
-  // Remove .git so the user starts with a fresh repo
-  const gitDir = path.join(dest, ".git");
-  if (fs.existsSync(gitDir)) {
-    fs.rmSync(gitDir, { recursive: true, force: true });
+function copyDir(src: string, dest: string): void {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
   }
 }
 
@@ -105,7 +106,6 @@ export function patchEnvExample(dest: string, choices: UserChoices): void {
 }
 
 export function patchUserMd(dest: string, choices: UserChoices): void {
-  // Find all USER.md files in identity subdirs and patch owner info
   const entries = fs.readdirSync(dest, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -113,7 +113,6 @@ export function patchUserMd(dest: string, choices: UserChoices): void {
     if (!fs.existsSync(userMd)) continue;
 
     let content = fs.readFileSync(userMd, "utf-8");
-    // Replace template variables
     content = content.replace(/\{\{OWNER_NAME\}\}/g, choices.ownerName);
     content = content.replace(/\{\{TIMEZONE\}\}/g, choices.timezone);
     content = content.replace(/\{\{WORKING_HOURS\}\}/g, choices.workingHours);
@@ -131,9 +130,7 @@ export function initGitRepo(dest: string): void {
 }
 
 export function scaffold(dest: string, choices: UserChoices): void {
-  const repo = choices.template.repo;
-
-  cloneTemplate(repo, dest);
+  copyDir(choices.template.dir, dest);
   patchManifest(dest, choices);
   patchEnvExample(dest, choices);
   patchUserMd(dest, choices);

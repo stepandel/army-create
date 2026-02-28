@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
+import { TEMPLATES } from "./templates.js";
 import { runPrompts } from "./prompts.js";
 import { scaffold } from "./scaffold.js";
 
@@ -12,25 +13,25 @@ async function main() {
   let projectName: string | undefined;
   let templateName: string | undefined;
 
-  // Parse args: army-create [project-name] [--template <name|url>]
+  // Parse args: army-create [project-name] [--template <name>]
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--template" || arg === "-t") {
       templateName = args[++i];
     } else if (arg === "--help" || arg === "-h") {
+      const names = TEMPLATES.map((t) => `    ${t.name.padEnd(8)} ${t.description}`).join("\n");
       console.log(`
   ${pc.bold("army-create")} — scaffold a clawup agent army project
 
   ${pc.dim("Usage:")}
-    npx army-create [project-name] [--template <name|git-url>]
+    npx army-create [project-name] [--template <name>]
 
   ${pc.dim("Templates:")}
-    army    PM + Engineer + QA team (default)
+${names}
 
   ${pc.dim("Examples:")}
     npx army-create my-project
     npx army-create my-project --template army
-    npx army-create my-project --template https://github.com/user/custom-identities
 `);
       process.exit(0);
     } else if (!arg.startsWith("-")) {
@@ -53,7 +54,7 @@ async function main() {
   }
 
   const s = p.spinner();
-  s.start("Cloning template...");
+  s.start("Scaffolding project...");
 
   try {
     scaffold(dest, choices);

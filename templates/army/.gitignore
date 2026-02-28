@@ -1,0 +1,3 @@
+# clawup local state
+.clawup/
+.env

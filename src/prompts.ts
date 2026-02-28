@@ -1,9 +1,9 @@
 import * as p from "@clack/prompts";
-import { TEMPLATES, findTemplate, isGitUrl, type Template } from "./templates.js";
+import { TEMPLATES, findTemplate, type Template } from "./templates.js";
 
 export interface UserChoices {
   projectName: string;
-  template: Template | { name: "custom"; repo: string; label: string; description: string };
+  template: Template;
   provider: "aws" | "hetzner" | "local";
   region: string;
   instanceType: string;
@@ -59,54 +59,31 @@ export async function runPrompts(defaults: {
   templateName?: string;
 }): Promise<UserChoices> {
   // --- Template ---
-  let template: UserChoices["template"];
+  let template: Template;
 
   if (defaults.templateName) {
     const found = findTemplate(defaults.templateName);
     if (found) {
       template = found;
-    } else if (isGitUrl(defaults.templateName)) {
-      template = {
-        name: "custom",
-        repo: defaults.templateName,
-        label: "Custom",
-        description: defaults.templateName,
-      };
     } else {
       p.log.error(
         `Unknown template "${defaults.templateName}". Available: ${TEMPLATES.map((t) => t.name).join(", ")}`
       );
       process.exit(1);
     }
+  } else if (TEMPLATES.length === 1) {
+    template = TEMPLATES[0];
   } else {
-    const options = [
-      ...TEMPLATES.map((t) => ({
+    const choice = await p.select({
+      message: "Select a template",
+      options: TEMPLATES.map((t) => ({
         value: t.name,
         label: t.label,
         hint: t.description,
       })),
-      { value: "__custom", label: "Custom Git URL", hint: "Provide your own template repo" },
-    ];
-
-    const choice = await p.select({
-      message: "Select a template",
-      options,
     });
     if (p.isCancel(choice)) cancelled();
-
-    if (choice === "__custom") {
-      const url = await p.text({
-        message: "Git URL of your template repo",
-        placeholder: "https://github.com/user/my-identities",
-        validate: (v) => {
-          if (!isGitUrl(v)) return "Must be a valid Git URL (https:// or git@)";
-        },
-      });
-      if (p.isCancel(url)) cancelled();
-      template = { name: "custom", repo: url, label: "Custom", description: url };
-    } else {
-      template = findTemplate(choice as string)!;
-    }
+    template = findTemplate(choice as string)!;
   }
 
   // --- Project name ---
@@ -125,16 +102,6 @@ export async function runPrompts(defaults: {
     if (p.isCancel(name)) cancelled();
     projectName = name;
   }
-
-  // --- Stack name ---
-  const stackName = await p.text({
-    message: "Stack name (used as Pulumi stack and Tailscale prefix)",
-    initialValue: projectName,
-    validate: (v) => {
-      if (!v.trim()) return "Stack name is required";
-    },
-  });
-  if (p.isCancel(stackName)) cancelled();
 
   // --- Cloud provider ---
   const provider = await p.select({
