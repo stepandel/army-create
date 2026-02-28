@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { execSync } from "node:child_process";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { TEMPLATES } from "./templates.js";
@@ -76,6 +77,40 @@ ${names}
     const { parse } = await import("yaml");
     const manifest = parse(raw);
     agentCount = manifest.agents?.length ?? 0;
+  }
+
+  // Check if clawup is installed, offer to install if not
+  let hasClawup = false;
+  try {
+    execSync("clawup --version", { stdio: "ignore" });
+    hasClawup = true;
+  } catch {
+    // not installed
+  }
+
+  if (!hasClawup) {
+    const install = await p.confirm({
+      message: "clawup CLI is not installed. Install it now?",
+      initialValue: true,
+    });
+
+    if (p.isCancel(install)) {
+      p.cancel("Cancelled.");
+      process.exit(0);
+    }
+
+    if (install) {
+      const installSpinner = p.spinner();
+      installSpinner.start("Installing clawup...");
+      try {
+        execSync("npm install -g clawup", { stdio: "ignore" });
+        installSpinner.stop("clawup installed.");
+        hasClawup = true;
+      } catch {
+        installSpinner.stop("Failed to install clawup.");
+        p.log.warn(`Run ${pc.cyan("npm install -g clawup")} manually.`);
+      }
+    }
   }
 
   p.note(
