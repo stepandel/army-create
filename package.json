@@ -1,0 +1,33 @@
+{
+  "name": "army-create",
+  "version": "0.1.0",
+  "description": "Scaffold a new clawup agent army project from a template",
+  "type": "module",
+  "bin": {
+    "army-create": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "clawup",
+    "ai-agents",
+    "scaffolding",
+    "create"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@clack/prompts": "^0.9",
+    "yaml": "^2.7.0",
+    "picocolors": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
