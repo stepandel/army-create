@@ -20,6 +20,21 @@ secrets:
   hcloudToken: ${env:HCLOUD_TOKEN}
   braveApiKey: ${env:BRAVE_API_KEY}
   anthropicApiKey: ${env:ANTHROPIC_API_KEY}
+hooks:
+  preStart: |
+    #!/bin/sh
+    set -e
+    # Pre-clone the working repo so agents have it from first boot.
+    cd /home/ubuntu
+    if [ ! -d "workspace-repo" ]; then
+      echo "Cloning $GITHUB_REPO..." >&2
+      gh repo clone "$GITHUB_REPO" workspace-repo 2>&1 >&2
+      echo "✓ Repository cloned" >&2
+    else
+      echo "Repository already cloned, pulling latest..." >&2
+      cd workspace-repo && git pull --ff-only 2>&1 >&2
+    fi
+
 agents:
   - identity: ./pm
   - identity: ./eng

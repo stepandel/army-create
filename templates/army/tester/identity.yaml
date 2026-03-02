@@ -7,6 +7,15 @@ volumeSize: 30
 model: anthropic/claude-opus-4-6
 codingAgent: claude-code
 
+hooks:
+  preStart: |
+    #!/bin/sh
+    set -e
+    cd /home/ubuntu/workspace-repo 2>/dev/null || exit 0
+    git config user.name "Scout"
+    git config user.email "scout@clawup.sh"
+    echo "✓ Git identity configured for Scout" >&2
+
 deps:
   - gh
   - brave-search

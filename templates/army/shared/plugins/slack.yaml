@@ -1,0 +1,185 @@
+# Slack plugin manifest override with onboard hook
+# Shared across all identities that use the Slack plugin.
+#
+# This overrides the built-in slack manifest from clawup to add an
+# interactive onboard hook that creates a Slack app via the App Manifest API.
+
+name: slack
+displayName: Slack
+installable: false
+needsFunnel: false
+configPath: channels
+secrets:
+  botToken:
+    envVar: SLACK_BOT_TOKEN
+    scope: agent
+    isSecret: true
+    required: true
+    autoResolvable: false
+    validator: "xoxb-"
+    instructions:
+      title: Slack Bot Token
+      steps:
+        - "After creating the app with the onboard hook:"
+        - "1. Go to OAuth & Permissions → copy Bot User OAuth Token (xoxb-...)"
+  appToken:
+    envVar: SLACK_APP_TOKEN
+    scope: agent
+    isSecret: true
+    required: true
+    autoResolvable: false
+    validator: "xapp-"
+    instructions:
+      title: Slack App-Level Token
+      steps:
+        - "After creating the app with the onboard hook:"
+        - "1. Go to Basic Information → App-Level Tokens → Generate Token"
+        - "2. Add the connections:write scope"
+        - "3. Copy the token (xapp-...)"
+internalKeys: []
+configTransforms:
+  - sourceKey: dm
+    targetKeys:
+      policy: dmPolicy
+      allowFrom: allowFrom
+    removeSource: true
+hooks:
+  onboard:
+    description: "Create a Slack app via the App Manifest API"
+    inputs:
+      configToken:
+        envVar: SLACK_CONFIG_TOKEN
+        prompt: "Slack app configuration token (xoxe-...)"
+        instructions: |
+          To get your config token:
+          1. Go to https://api.slack.com/apps
+          2. Click "Your App Configuration Tokens" → "Generate Token"
+          3. Select your workspace and click "Generate"
+          4. Copy the token (starts with xoxe-)
+          Note: Config tokens expire every 12 hours
+        validator: "xoxe-"
+    script: |
+      #!/bin/sh
+      set -e
+
+      APP_NAME="${AGENT_NAME:-OpenClaw Agent}"
+
+      # Build the Slack app manifest JSON
+      MANIFEST=$(cat <<MANIFEST_EOF
+      {
+        "display_information": {
+          "name": "$APP_NAME",
+          "description": "AI assistant powered by OpenClaw",
+          "background_color": "#1a1a2e"
+        },
+        "features": {
+          "bot_user": {
+            "display_name": "$APP_NAME",
+            "always_online": true
+          }
+        },
+        "oauth_config": {
+          "scopes": {
+            "bot": [
+              "app_mentions:read",
+              "channels:history",
+              "channels:read",
+              "channels:join",
+              "chat:write",
+              "groups:history",
+              "groups:read",
+              "im:history",
+              "im:read",
+              "im:write",
+              "mpim:history",
+              "mpim:read",
+              "reactions:read",
+              "reactions:write",
+              "users:read",
+              "pins:read",
+              "pins:write",
+              "files:read",
+              "files:write"
+            ]
+          }
+        },
+        "settings": {
+          "event_subscriptions": {
+            "bot_events": [
+              "app_mention",
+              "message.channels",
+              "message.groups",
+              "message.im",
+              "message.mpim",
+              "reaction_added",
+              "reaction_removed",
+              "member_joined_channel",
+              "member_left_channel",
+              "channel_rename",
+              "pin_added",
+              "pin_removed"
+            ]
+          },
+          "interactivity": {
+            "is_enabled": false
+          },
+          "org_deploy_enabled": false,
+          "socket_mode_enabled": true,
+          "token_rotation_enabled": false
+        }
+      }
+      MANIFEST_EOF
+      )
+
+      # Validate the manifest first
+      echo "Validating Slack app manifest..." >&2
+      VALIDATE_RESPONSE=$(curl -s -X POST "https://slack.com/api/apps.manifest.validate" \
+        -H "Authorization: Bearer $SLACK_CONFIG_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{\"manifest\": $MANIFEST}")
+
+      VALIDATE_OK=$(echo "$VALIDATE_RESPONSE" | jq -r '.ok')
+      if [ "$VALIDATE_OK" != "true" ]; then
+        VALIDATE_ERROR=$(echo "$VALIDATE_RESPONSE" | jq -r '.error // "unknown error"')
+        VALIDATE_ERRORS=$(echo "$VALIDATE_RESPONSE" | jq -r '.errors // [] | .[] | .message' 2>/dev/null)
+        echo "Manifest validation failed: $VALIDATE_ERROR" >&2
+        if [ -n "$VALIDATE_ERRORS" ]; then
+          echo "$VALIDATE_ERRORS" >&2
+        fi
+        exit 1
+      fi
+      echo "Manifest validated successfully" >&2
+
+      # Create the app
+      echo "Creating Slack app '$APP_NAME'..." >&2
+      CREATE_RESPONSE=$(curl -s -X POST "https://slack.com/api/apps.manifest.create" \
+        -H "Authorization: Bearer $SLACK_CONFIG_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{\"manifest\": $MANIFEST}")
+
+      CREATE_OK=$(echo "$CREATE_RESPONSE" | jq -r '.ok')
+      if [ "$CREATE_OK" != "true" ]; then
+        CREATE_ERROR=$(echo "$CREATE_RESPONSE" | jq -r '.error // "unknown error"')
+        echo "App creation failed: $CREATE_ERROR" >&2
+        exit 1
+      fi
+
+      APP_ID=$(echo "$CREATE_RESPONSE" | jq -r '.app_id // .credentials.app_id')
+      echo "App created successfully" >&2
+
+      # Output follow-up instructions to stdout
+      echo "✅ Slack app '$APP_NAME' created! App ID: $APP_ID"
+      echo ""
+      echo "Next steps:"
+      echo "  1. Install the app to your workspace:"
+      echo "     https://api.slack.com/apps/$APP_ID/install-on-team"
+      echo ""
+      echo "  2. Copy the Bot User OAuth Token (xoxb-...):"
+      echo "     https://api.slack.com/apps/$APP_ID/oauth"
+      echo "     → Set as SLACK_BOT_TOKEN in your .env"
+      echo ""
+      echo "  3. Create an App-Level Token (xapp-...):"
+      echo "     https://api.slack.com/apps/$APP_ID/general"
+      echo "     → App-Level Tokens → Generate Token → add 'connections:write' scope"
+      echo "     → Set as SLACK_APP_TOKEN in your .env"
+    runOnce: true
