@@ -1,5 +1,7 @@
 # army-create
 
+> **This project is archived.** The upstream dependency [clawup](https://github.com/stepandel/clawup) has been archived and is no longer maintained. This CLI is no longer functional and will not receive updates.
+
 Scaffold a new [clawup](https://github.com/stepandel/clawup) agent army project from a template.
 
 ## Quick Start
